@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お問い合わせ - エミネンス</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            line-height: 1.8; 
+            background-color: #f8f9fa;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #FF9500, #FF3B30);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { 
+            margin: 0;
+            font-size: 2.2em;
+            font-weight: 700;
+        }
+        .content {
+            padding: 40px;
+        }
+        h2 { 
+            color: #333; 
+            border-bottom: 2px solid #FF9500; 
+            padding-bottom: 8px;
+            margin-top: 40px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #007AFF;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .contact-method {
+            background-color: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border-left: 4px solid #FF9500;
+        }
+        .contact-method h3 {
+            margin-top: 0;
+            color: #333;
+            display: flex;
+            align-items: center;
+        }
+        .contact-method h3::before {
+            content: '📧';
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        .email-address {
+            background-color: #e9ecef;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 16px;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .response-time {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .faq-item {
+            border-bottom: 1px solid #eee;
+            padding: 20px 0;
+        }
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+        .faq-question {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .faq-answer {
+            color: #666;
+            margin-left: 20px;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            border-top: 1px solid #eee;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 お問い合わせ</h1>
+        </div>
+        
+        <div class="content">
+            <a href="index.html" class="back-link">← 戻る</a>
+            
+            <div class="response-time">
+                <strong>🕐 対応時間について</strong><br>
+                通常、お問い合わせから48時間以内にご返信いたします。お急ぎの場合はその旨をお書き添えください。
+            </div>
+
+            <h2>📧 メールでのお問い合わせ</h2>
+            <div class="contact-method">
+                <h3>サポート窓口</h3>
+                <p>アプリに関するご質問、不具合報告、機能改善のご提案などは以下のメールアドレスまでお送りください。</p>
+                <div class="email-address">
+                    san3.contact@gmail.com
+                </div>
+                <p><strong>お問い合わせ時にご記入いただく情報：</strong></p>
+                <ul>
+                    <li>お名前（ニックネーム可）</li>
+                    <li>お問い合わせ内容の種類（不具合報告/機能要望/その他）</li>
+                    <li>iPhone/iPadの機種</li>
+                    <li>iOSバージョン</li>
+                    <li>アプリバージョン</li>
+                    <li>詳細な症状・ご要望</li>
+                </ul>
+            </div>
+
+            <h2>🐛 不具合を報告する場合</h2>
+            <div class="contact-method">
+                <h3>不具合報告フォーマット</h3>
+                <p>不具合を報告いただく際は、以下の情報を含めていただけると迅速な対応が可能です：</p>
+                <ul>
+                    <li><strong>発生した問題：</strong> 何が起こったか</li>
+                    <li><strong>再現手順：</strong> どのような操作で問題が発生するか</li>
+                    <li><strong>期待する動作：</strong> 本来どうなるべきか</li>
+                    <li><strong>スクリーンショット：</strong> 可能であれば画面キャプチャ</li>
+                    <li><strong>発生頻度：</strong> 常に発生/時々発生/一度だけ</li>
+                </ul>
+            </div>
+
+            <h2>❓ よくある質問</h2>
+            
+            <div class="faq-item">
+                <div class="faq-question">Q. ログインしなくても使えますか？</div>
+                <div class="faq-answer">A. はい。投稿、いいね、ブックマーク、リプライなどの基本機能は未ログインでもご利用いただけます。ログインするとプロフィール機能やバッジ機能などの追加機能をお使いいただけます。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. データは削除できますか？</div>
+                <div class="faq-answer">A. ログインユーザーの場合、プロフィール情報や投稿データの削除が可能です。詳細はサポートまでお問い合わせください。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. 通知を停止したいのですが</div>
+                <div class="faq-answer">A. iPhoneの設定 > 通知 > 名言SNS から通知設定を変更できます。アプリ内での細かい通知設定は今後追加予定です。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. 不適切な投稿を見つけました</div>
+                <div class="faq-answer">A. 不適切な投稿を発見された場合は、該当の投稿ID（投稿詳細画面のURL）とともにサポートまでご報告ください。速やかに対応いたします。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. 機能改善の要望があります</div>
+                <div class="faq-answer">A. 新機能のご要望や改善提案は大歓迎です！詳細な説明とともにサポートまでお送りください。開発の参考にさせていただきます。</div>
+            </div>
+
+            <h2>📱 アプリストア レビュー</h2>
+            <div class="contact-method">
+                <h3>App Store でのレビューもお待ちしています</h3>
+                <p>アプリを気に入っていただけましたら、App Store でのレビューもぜひお願いいたします。皆様のご意見が開発の励みになります。</p>
+                <p>⭐⭐⭐⭐⭐ レビューお待ちしています！</p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 エミネンス. All rights reserved.</p>
+            <p>お困りのことがございましたら、いつでもお気軽にお問い合わせください。</p>
+        </div>
+    </div>
+</body>
+</html>
