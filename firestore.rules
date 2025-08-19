@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 名言の読み取りは全員可能
+    match /quotes/{quoteId} {
+      allow read: if true;
+      // 投稿は全員可能（匿名含む）
+      allow create: if request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 500 &&
+        request.resource.data.author.size() > 0 &&
+        request.resource.data.author.size() <= 100;
+      // いいね・ブックマークの更新は全員可能
+      allow update: if request.resource.data.text == resource.data.text &&
+        request.resource.data.author == resource.data.author &&
+        request.resource.data.authorUid == resource.data.authorUid;
+      // 削除は本人または管理者のみ（匿名ユーザーも自分の投稿は削除可能）
+      allow delete: if request.auth != null &&
+        (request.auth.uid == resource.data.authorUid || isAdmin());
+
+      // リプライ
+      match /replies/{replyId} {
+        allow read: if true;
+        // 未ログインでもリプライ可能
+        allow create: if true;
+        // 削除は本人または管理者のみ
+        allow delete: if request.auth != null &&
+          (request.auth.uid == resource.data.authorUid || isAdmin());
+      }
+    }
+
+    // ユーザー設定
+    match /users/{userId} {
+      allow read, write: if request.auth != null &&
+        request.auth.uid == userId;
+    }
+    
+    // ヘルパー関数: ユーザーが運営者バッジを持っているかチェック（AdminPanel権限）
+    function isAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.get('allBadges', []).hasAny(['admin']);
+    }
+    
+    // ユーザープロフィール（読み取りは全員可能、書き込みは本人または運営者）
+    match /userProfiles/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin()) &&
+        (!("displayName" in request.resource.data) || 
+          (request.resource.data.displayName is string && 
+           request.resource.data.displayName.size() <= 30)) &&
+        (!("bio" in request.resource.data) || 
+          (request.resource.data.bio is string && 
+           request.resource.data.bio.size() <= 160));
+      allow update: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin()) &&
+        (!("displayName" in request.resource.data) || 
+          (request.resource.data.displayName is string && 
+           request.resource.data.displayName.size() <= 30)) &&
+        (!("bio" in request.resource.data) || 
+          (request.resource.data.bio is string && 
+           request.resource.data.bio.size() <= 160));
+      allow delete: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+    }
+    
+    // 通知（読み取り・削除は本人のみ、作成は認証済みユーザー）
+    match /notifications/{notificationId} {
+      allow read, update, delete: if request.auth != null &&
+        request.auth.uid == resource.data.toUserId;
+      allow create: if request.auth != null;
+    }
+    
+    // 毎日のトップ名言（読み取りのみ全員可能）
+    match /dailyTopQuotes/{dateId} {
+      allow read: if true;
+      // 書き込みはCloud Functionsのみ
+      allow write: if false;
+    }
+    
+    // 報告機能
+    match /reports/{reportId} {
+      // 読み取りは管理者のみ
+      allow read: if isAdmin();
+      // 作成は全員可能（スパム防止のため、同一ユーザーの連続報告は制限）
+      allow create: if request.resource.data.reason in ['スパム', '嫌がらせ・いじめ', '不適切なコンテンツ', '暴力的な内容', '誤情報', '著作権侵害', 'その他'];
+      // 更新・削除は管理者のみ
+      allow update, delete: if isAdmin();
+    }
+  }
+}
