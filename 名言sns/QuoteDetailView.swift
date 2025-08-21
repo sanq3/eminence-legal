@@ -25,6 +25,12 @@ struct QuoteDetailView: View {
     @State private var showingBlockAlert = false
     @State private var reportReason: ReportReason = .inappropriate
     
+    // 利用規約同意
+    @State private var showingTermsAgreement = false
+    @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
+    @AppStorage("agreedTermsVersion") private var agreedTermsVersion = ""
+    let currentTermsVersion = "1.0.0"
+    
     init(quote: Quote) {
         self.quote = quote
         // ローカル状態を初期化
@@ -292,6 +298,12 @@ struct QuoteDetailView: View {
                 buttons: getActionSheetButtons()
             )
         }
+        .sheet(isPresented: $showingTermsAgreement) {
+            TermsAgreementView {
+                // 同意後にリプライ送信
+                performReply()
+            }
+        }
         .sheet(isPresented: $showingReportSheet) {
             ReportView(
                 targetType: .quote,
@@ -377,6 +389,17 @@ struct QuoteDetailView: View {
     private func sendReply() {
         guard !replyText.isEmpty else { return }
         
+        // 利用規約に同意していない場合は同意画面を表示
+        if !hasAgreedToTerms || agreedTermsVersion != currentTermsVersion {
+            showingTermsAgreement = true
+            return
+        }
+        
+        // 同意済みの場合はリプライ送信
+        performReply()
+    }
+    
+    private func performReply() {
         let authorName = getCurrentUserDisplayName()
         let userId = Auth.auth().currentUser?.uid ?? ""
         var reply = Reply(text: replyText, author: authorName, authorUid: userId)
@@ -512,7 +535,7 @@ struct ReplyRowView: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                // ユーザー名 + チェックマーク
+                // ユーザー名 + チェックマーク + 時刻
                 HStack(spacing: 4) {
                     Text(reply.authorDisplayName.isEmpty ? reply.author : reply.authorDisplayName)
                         .font(.caption)
@@ -535,6 +558,13 @@ struct ReplyRowView: View {
                                 .shadow(color: .blue.opacity(0.3), radius: 1, x: 0, y: 0.5)
                         }
                     }
+                    
+                    Spacer()
+                    
+                    // 時刻表示
+                    Text(formatTime(reply.createdAt))
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.7))
                 }
                 
                 Text(reply.text)
@@ -559,6 +589,31 @@ struct ReplyRowView: View {
                     self.replyAuthorProfile = profile
                 }
             }
+        }
+    }
+    
+    // 時間を相対的な表示に変換する関数（ReplyRowView専用）
+    private func formatTime(_ date: Date) -> String {
+        let now = Date()
+        let calendar = Calendar.current
+        let timeInterval = now.timeIntervalSince(date)
+        
+        if timeInterval < 60 {
+            return "たった今"
+        } else if timeInterval < 3600 {
+            let minutes = Int(timeInterval / 60)
+            return "\(minutes)分前"
+        } else if timeInterval < 86400 {
+            let hours = Int(timeInterval / 3600)
+            return "\(hours)時間前"
+        } else if calendar.isDate(date, equalTo: now, toGranularity: .year) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d"
+            return formatter.string(from: date)
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy/M/d"
+            return formatter.string(from: date)
         }
     }
 }

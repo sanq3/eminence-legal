@@ -162,7 +162,7 @@ struct QuoteCardView: View {
             // 下のスペース
             Spacer()
             
-            // Author - 右下配置
+            // Author - 右下配置（投稿時間は表示しない）
             HStack {
                 Spacer()
                 authorDisplayView

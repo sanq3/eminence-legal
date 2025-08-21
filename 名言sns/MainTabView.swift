@@ -10,6 +10,11 @@ struct MainTabView: View {
     @State private var authStateListener: AuthStateDidChangeListenerHandle?
     @State private var selectedTab = 0
     @State private var homeTabTappedTwice = false
+    @AppStorage("hasAgreedToTerms") private var hasAgreedToTerms = false
+    @AppStorage("agreedTermsVersion") private var agreedTermsVersion = ""
+    @State private var showingTermsAgreement = false
+    
+    let currentTermsVersion = "1.0.0"
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -58,14 +63,21 @@ struct MainTabView: View {
             // 認証状態の変更を監視
             authStateListener = Auth.auth().addStateDidChangeListener { auth, user in
                 if let user = user, !user.isAnonymous {
-                    // ログイン後にプロフィールをロード
+                    // ログイン後にプロフィールと通知をロード
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         sharedProfileViewModel.loadUserProfile()
+                        sharedNotificationViewModel.startListening()
                     }
                 } else {
-                    // ログアウト時にプロフィールをクリア
+                    // ログアウト時にプロフィールをクリアし、通知監視を停止
                     sharedProfileViewModel.clearUserProfile()
+                    sharedNotificationViewModel.stopListening()
                 }
+            }
+            
+            // アプリ起動時、既にログイン済みの場合は即座に通知監視を開始
+            if let user = Auth.auth().currentUser, !user.isAnonymous {
+                sharedNotificationViewModel.startListening()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserLoggedOut"))) { _ in
@@ -95,8 +107,8 @@ struct MainTabView: View {
                 // 全データをリフレッシュ（いいね状態を正しく反映）
                 sharedQuoteViewModel.fetchData()
                 
-                // 通知をフェッチ
-                sharedNotificationViewModel.fetchNotifications()
+                // 通知監視を開始（リアルタイム更新）
+                sharedNotificationViewModel.startListening()
             }
         }
         .onChange(of: selectedTab) { newTab in
@@ -111,6 +123,7 @@ struct MainTabView: View {
                 Auth.auth().removeStateDidChangeListener(listener)
             }
         }
+        // 利用規約への同意は投稿時に求めるため、ここでは表示しない
     }
     
     private func handleHomeTabTap() {

@@ -25,6 +25,7 @@ class NotificationViewModel: ObservableObject {
         }
         
         print(" Starting notification listener for userId: \(currentUserId)")
+        print("🔍 Query: collection('notifications').whereField('toUserId', isEqualTo: '\(currentUserId)')")
         isLoading = true
         
         listenerRegistration = db.collection("notifications")
@@ -45,7 +46,16 @@ class NotificationViewModel: ObservableObject {
                         return
                     }
                     
-                    print(" Received \(documents.count) notifications")
+                    print("📬 通知受信: \(documents.count)件 (ユーザー: \(currentUserId))")
+                    
+                    // 各ドキュメントの詳細をログ出力
+                    for (index, doc) in documents.enumerated() {
+                        let data = doc.data()
+                        print("📄 Document \(index): ID=\(doc.documentID)")
+                        print("   - toUserId: \(data["toUserId"] as? String ?? "nil")")
+                        print("   - type: \(data["type"] as? String ?? "nil")")
+                        print("   - fromUserName: \(data["fromUserName"] as? String ?? "nil")")
+                    }
                     
                     let notifications = documents.compactMap { doc -> AppNotification? in
                         do {
@@ -62,6 +72,8 @@ class NotificationViewModel: ObservableObject {
                     let sortedNotifications = notifications.sorted { $0.createdAt > $1.createdAt }
                     self?.notifications = sortedNotifications
                     self?.updateUnreadCount()
+                    
+                    print("📱 通知一覧更新: \(sortedNotifications.count)件表示")
                 }
             }
     }
@@ -175,12 +187,44 @@ class NotificationViewModel: ObservableObject {
     private static func saveNotification(_ notification: AppNotification) {
         let db = Firestore.firestore()
         
+        print("💾 通知をFirestoreに保存中: \(notification.type) -> \(notification.toUserId)")
         do {
             _ = try db.collection("notifications").addDocument(from: notification)
-            print(" Notification saved successfully")
+            print("✅ 通知保存成功: \(notification.type)")
         } catch {
-            print(" Error saving notification: \(error)")
+            print("❌ 通知保存エラー: \(error)")
         }
+    }
+    
+    // MARK: - テスト用通知作成
+    static func createTestNotification(toUserId: String) {
+        let testNotification = AppNotification(
+            type: .like,
+            message: "テストユーザーさんがあなたの名言にいいねしました",
+            fromUserId: "test-user",
+            fromUserName: "テストユーザー",
+            fromUserProfileImage: nil,
+            toUserId: toUserId,
+            relatedQuoteId: "test-quote",
+            relatedQuoteText: "これはテスト投稿です",
+            replyText: nil,
+            isRead: false
+        )
+        
+        print("🧪 テスト通知を作成中: test-user -> \(toUserId)")
+        saveNotification(testNotification)
+    }
+    
+    // MARK: - 現在のユーザーにテスト通知を作成
+    static func createTestNotificationForCurrentUser() {
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              !(Auth.auth().currentUser?.isAnonymous ?? true) else {
+            print("❌ ログインユーザーが見つからないため、テスト通知をスキップ")
+            return
+        }
+        
+        print("🧪 現在のユーザーにテスト通知作成: \(currentUserId)")
+        createTestNotification(toUserId: currentUserId)
     }
     
     // MARK: - その他の機能

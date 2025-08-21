@@ -110,7 +110,9 @@ struct NotificationViewShared: View {
             }
         }
         .onAppear {
-            notificationViewModel.fetchNotifications()
+            notificationViewModel.startListening()
+            
+            // デバッグログは不要になったので削除
         }
         .alert("エラー", isPresented: .constant(notificationViewModel.errorMessage != nil)) {
             Button("了解") {

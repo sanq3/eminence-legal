@@ -13,10 +13,10 @@ struct SettingsView: View {
     @State private var alertMessage = ""
     @State private var isLoggingOut = false
     @AppStorage("isDarkMode") private var isDarkMode = false
-    @State private var notificationsEnabled = false
     @State private var versionTapCount = 0
     @State private var showingAdminPanel = false
     @State private var showingAccountDeletion = false
+    @State private var showingContactSupport = false
     
     private var isLoggedIn: Bool {
         Auth.auth().currentUser?.isAnonymous == false
@@ -106,22 +106,6 @@ struct SettingsView: View {
                             }
                     }
                     
-                    HStack {
-                        Image(systemName: "bell.fill")
-                            .font(.title2)
-                            .foregroundColor(.orange)
-                        Text("プッシュ通知")
-                        Spacer()
-                        Toggle("", isOn: $notificationsEnabled)
-                            .disabled(!isLoggedIn)
-                    }
-                    .opacity(isLoggedIn ? 1.0 : 0.5)
-                    
-                    if !isLoggedIn {
-                        Text("ログインすると通知機能が利用できます")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
                 }
                 
                 
@@ -190,16 +174,14 @@ struct SettingsView: View {
                     }
                     
                     Button(action: {
-                        // お問い合わせを開く
-                        if let url = URL(string: "https://sanq3.github.io/eminence-legal/legal-docs/contact.html") {
-                            UIApplication.shared.open(url)
-                        }
+                        // アプリ内お問い合わせフォームを表示
+                        showingContactSupport = true
                     }) {
                         HStack {
                             Image(systemName: "envelope.fill")
                                 .font(.title2)
                                 .foregroundColor(.green)
-                            Text("お問い合わせ")
+                            Text("お問い合わせ・不適切コンテンツの報告")
                                 .foregroundColor(.primary)
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -283,6 +265,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingAccountDeletion) {
             AccountDeletionView()
+        }
+        .sheet(isPresented: $showingContactSupport) {
+            ContactSupportView()
         }
         .alert(alertTitle, isPresented: $showingAlert) {
             if alertTitle == "ログアウト" {

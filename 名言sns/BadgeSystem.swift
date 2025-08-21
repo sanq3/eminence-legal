@@ -144,17 +144,63 @@ class BadgeManager: ObservableObject {
     
     // バッジを付与
     func awardBadge(_ badge: BadgeType, to userId: String) {
-        db.collection("users").document(userId).updateData([
-            "badges": FieldValue.arrayUnion([badge.rawValue])
-        ]) { error in
-            if let error = error {
-                print("バッジ付与エラー: \(error)")
-            } else {
-                print("バッジ \(badge.title) を付与しました")
+        // 既にバッジを持っているかチェック
+        db.collection("userProfiles").document(userId).getDocument { [weak self] document, error in
+            if let document = document, document.exists {
+                let data = document.data()
+                let allBadges = data?["allBadges"] as? [String] ?? []
                 
-                // 通知を送信
-                self.sendBadgeNotification(badge: badge, userId: userId)
+                // 既にバッジを持っている場合は付与しない
+                if allBadges.contains(badge.rawValue) {
+                    print("バッジ \(badge.title) は既に付与済みです")
+                    return
+                }
+                
+                // バッジを付与
+                self?.db.collection("userProfiles").document(userId).updateData([
+                    "allBadges": FieldValue.arrayUnion([badge.rawValue])
+                ]) { error in
+                    if let error = error {
+                        print("バッジ付与エラー: \(error)")
+                    } else {
+                        print("✅ バッジ \(badge.title) を付与しました")
+                        
+                        // BadgeUpdated通知を送信してUIを更新
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: NSNotification.Name("BadgeUpdated"), object: nil)
+                        }
+                        
+                        // プッシュ通知を送信
+                        self?.sendBadgeNotification(badge: badge, userId: userId)
+                    }
+                }
             }
+        }
+    }
+    
+    // 投稿数に基づくバッジチェック
+    func checkPostBadges(userId: String, postCount: Int) {
+        if postCount >= 1 {
+            awardBadge(.firstPost, to: userId)
+        }
+        if postCount >= 5 {
+            awardBadge(.fivePosts, to: userId)
+        }
+        if postCount >= 10 {
+            awardBadge(.tenPosts, to: userId)
+        }
+    }
+    
+    // いいね数に基づくバッジチェック
+    func checkLikeBadges(userId: String, totalLikes: Int) {
+        if totalLikes >= 10 {
+            awardBadge(.tenLikes, to: userId)
+        }
+        if totalLikes >= 50 {
+            awardBadge(.fiftyLikes, to: userId)
+        }
+        if totalLikes >= 100 {
+            awardBadge(.hundredLikes, to: userId)
         }
     }
     

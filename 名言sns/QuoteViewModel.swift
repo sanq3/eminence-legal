@@ -162,6 +162,22 @@ class QuoteViewModel: ObservableObject {
             return
         }
         
+        // コンテンツの適切性チェック
+        let moderationResult = ContentModerationService.shared.isContentAppropriate(newQuote.text)
+        if !moderationResult.isAppropriate {
+            errorMessage = moderationResult.reason ?? "投稿内容が不適切です"
+            return
+        }
+        
+        // 作者名もチェック
+        if !newQuote.author.isEmpty {
+            let authorModeration = ContentModerationService.shared.isContentAppropriate(newQuote.author)
+            if !authorModeration.isAppropriate {
+                errorMessage = "作者名が不適切です"
+                return
+            }
+        }
+        
         // 匿名ユーザーの投稿頻度制限（スパム防止）
         if currentUser.isAnonymous {
             // 実装例：匿名ユーザーは1日5投稿まで等の制限を追加可能
@@ -363,7 +379,11 @@ class QuoteViewModel: ObservableObject {
                        let wasLiked = result["wasLiked"] as? Bool,
                        let quoteData = result["quoteData"] as? Quote,
                        !wasLiked { // いいね追加時のみ
+                        // 投稿者のバッジチェック（いいね数に基づく）
                         self?.checkAndAwardBadges(userId: quoteData.authorUid)
+                        
+                        // 現在のユーザーのバッジチェック（投稿数に基づく）
+                        self?.checkAndAwardBadges(userId: userId)
                     }
                 }
             }
@@ -472,6 +492,14 @@ class QuoteViewModel: ObservableObject {
             self.errorMessage = "認証処理中です。リプライできません。"
             return
         }
+        
+        // リプライ内容の適切性チェック
+        let moderationResult = ContentModerationService.shared.isContentAppropriate(newReply.text)
+        if !moderationResult.isAppropriate {
+            errorMessage = moderationResult.reason ?? "リプライ内容が不適切です"
+            return
+        }
+        
         newReply.authorUid = currentUser.uid
         
         // ログイン済みユーザーの場合、プロフィール情報を設定
@@ -561,12 +589,21 @@ class QuoteViewModel: ObservableObject {
         quoteId: String,
         quoteText: String
     ) {
+        print("🔍 通知作成チェック:")
+        print("   - fromUserId: \(fromUserId)")
+        print("   - toUserId: \(toUserId)")
+        print("   - 同じユーザー?: \(fromUserId == toUserId)")
+        print("   - 匿名ユーザー?: \(Auth.auth().currentUser?.isAnonymous ?? true)")
+        
         // 匿名ユーザーまたは自分自身への通知は作成しない
         guard !(Auth.auth().currentUser?.isAnonymous ?? true),
               fromUserId != toUserId,
               !toUserId.isEmpty else {
+            print("❌ 通知作成をスキップ: 自分自身または匿名ユーザー")
             return
         }
+        
+        print("✅ 通知作成を続行")
         
         // 現在のユーザーのプロフィール情報を取得
         db.collection("userProfiles").document(fromUserId).getDocument { document, error in
@@ -580,6 +617,7 @@ class QuoteViewModel: ObservableObject {
             }
             
             // 通知を作成
+            print("🔔 いいね通知を作成中: \(fromUserName) -> \(toUserId)")
             NotificationViewModel.createLikeNotification(
                 fromUserId: fromUserId,
                 fromUserName: fromUserName,
@@ -617,6 +655,7 @@ class QuoteViewModel: ObservableObject {
         }
         
         // 通知を作成
+        print("🔔 リプライ通知を作成中: \(fromUserName) -> \(toUserId)")
         NotificationViewModel.createReplyNotification(
             fromUserId: fromUserId,
             fromUserName: fromUserName,
@@ -652,95 +691,13 @@ class QuoteViewModel: ObservableObject {
                     sum + (doc.data()["likes"] as? Int ?? 0)
                 }
                 
-                // 現在のバッジを取得
-                self?.db.collection("userProfiles").document(userId).getDocument { document, error in
-                    var currentBadges = [String]()
-                    if let data = document?.data() {
-                        currentBadges = data["allBadges"] as? [String] ?? []
-                    }
-                    
-                    var newBadges = [String]()
-                    
-                    // 初投稿バッジ
-                    if postCount >= 1 && !currentBadges.contains("first_post") {
-                        newBadges.append("first_post")
-                    }
-                    
-                    // 投稿数バッジ
-                    if postCount >= 5 && !currentBadges.contains("five_posts") {
-                        newBadges.append("five_posts")
-                    }
-                    if postCount >= 10 && !currentBadges.contains("ten_posts") {
-                        newBadges.append("ten_posts")
-                    }
-                    
-                    // いいね数バッジ
-                    if totalLikes >= 10 && !currentBadges.contains("ten_likes") {
-                        newBadges.append("ten_likes")
-                    }
-                    if totalLikes >= 50 && !currentBadges.contains("fifty_likes") {
-                        newBadges.append("fifty_likes")
-                    }
-                    if totalLikes >= 100 && !currentBadges.contains("hundred_likes") {
-                        newBadges.append("hundred_likes")
-                    }
-                    
-                    // 時間帯バッジ
-                    let hour = Calendar.current.component(.hour, from: Date())
-                    if hour >= 5 && hour <= 7 && !currentBadges.contains("early_bird") {
-                        newBadges.append("early_bird")
-                    }
-                    if (hour >= 0 && hour <= 2) && !currentBadges.contains("night_owl") {
-                        newBadges.append("night_owl")
-                    }
-                    
-                    // 新しいバッジがあれば付与
-                    if !newBadges.isEmpty {
-                        self?.awardBadges(newBadges, to: userId, currentBadges: currentBadges)
-                    }
-                }
+                // BadgeManagerを使ってバッジをチェック
+                let badgeManager = BadgeManager()
+                badgeManager.checkPostBadges(userId: userId, postCount: postCount)
+                badgeManager.checkLikeBadges(userId: userId, totalLikes: totalLikes)
+                
+                print("📊 バッジチェック完了 - 投稿数: \(postCount), 総いいね数: \(totalLikes)")
             }
     }
     
-    private func awardBadges(_ badges: [String], to userId: String, currentBadges: [String]) {
-        let allBadges = currentBadges + badges
-        
-        db.collection("userProfiles").document(userId).setData([
-            "allBadges": allBadges,
-            "updatedAt": FieldValue.serverTimestamp()
-        ], merge: true) { error in
-            if error == nil {
-                // バッジ獲得通知
-                for badge in badges {
-                    self.sendBadgeNotification(badgeId: badge)
-                }
-            }
-        }
-    }
-    
-    private func sendBadgeNotification(badgeId: String) {
-        let badgeNames: [String: String] = [
-            "first_post": "初投稿",
-            "five_posts": "5投稿達成",
-            "ten_posts": "10投稿達成",
-            "ten_likes": "10いいね獲得",
-            "fifty_likes": "50いいね獲得",
-            "hundred_likes": "100いいね獲得",
-            "early_bird": "早起き投稿者",
-            "night_owl": "夜更かし投稿者"
-        ]
-        
-        let content = UNMutableNotificationContent()
-        content.title = "🎉 バッジを獲得しました！"
-        content.body = badgeNames[badgeId] ?? "新しいバッジ"
-        content.sound = .default
-        
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-        
-        UNUserNotificationCenter.current().add(request)
-    }
 }
