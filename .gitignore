@@ -10,7 +10,9 @@ firebase-debug.*.log*
 # Firebase cache
 .firebase/
 
-# Firebase config
+# Firebase config - 機密情報を含むため除外
+GoogleService-Info.plist
+名言sns/GoogleService-Info.plist
 
 # Uncomment this if you'd like others to create their own Firebase project.
 # For a team working on the same Firebase project(s), it is recommended to leave
