@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var selectedQuote: Quote?
     @State private var currentPage = 0
     @State private var isFirstLaunch = true
+    @State private var showingTermsAgreement = false
+    @AppStorage("hasAgreedToTermsAnonymous") private var hasAgreedToTermsAnonymous = false
 
     var body: some View {
         NavigationStack {
@@ -177,6 +179,13 @@ struct ContentView: View {
                 if Auth.auth().currentUser?.isAnonymous == false {
                     profileViewModel.loadUserProfile()
                 }
+                
+                // 未ログインユーザーで初回起動時のみ利用規約同意ポップアップを表示
+                if !hasAgreedToTermsAnonymous && (Auth.auth().currentUser == nil || Auth.auth().currentUser?.isAnonymous == true) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showingTermsAgreement = true
+                    }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserLoggedIn"))) { _ in
                 // ログイン後、データをリフレッシュしていいね状態を更新
@@ -208,6 +217,12 @@ struct ContentView: View {
             }, message: {
                 Text(viewModel.errorMessage ?? "不明なエラーが発生しました。")
             })
+            .fullScreenCover(isPresented: $showingTermsAgreement) {
+                TermsAgreementView(onAgree: {
+                    hasAgreedToTermsAnonymous = true
+                    showingTermsAgreement = false
+                })
+            }
         }
     }
 
