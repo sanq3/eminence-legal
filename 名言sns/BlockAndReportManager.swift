@@ -122,6 +122,31 @@ class BlockAndReportManager: ObservableObject {
             }
         }
     }
+    
+    // リプライ（コメント）を報告
+    func reportReply(_ quoteId: String, replyId: String, reason: ReportReason, additionalInfo: String? = nil, completion: @escaping (Bool, String) -> Void) {
+        let reporterId = Auth.auth().currentUser?.uid ?? "anonymous"
+        
+        let reportData: [String: Any] = [
+            "quoteId": quoteId,
+            "replyId": replyId,
+            "reporterId": reporterId,
+            "reason": reason.rawValue,
+            "additionalInfo": additionalInfo ?? "",
+            "status": "pending",
+            "type": "reply",
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        
+        db.collection("reports").addDocument(data: reportData) { error in
+            if let error = error {
+                print("Report reply error: \(error)")
+                completion(false, "報告の送信に失敗しました")
+            } else {
+                completion(true, "コメントを報告しました。確認後、適切に対処いたします。")
+            }
+        }
+    }
 }
 
 // 報告理由の列挙型

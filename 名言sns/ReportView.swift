@@ -3,6 +3,7 @@ import SwiftUI
 enum ReportTargetType {
     case quote
     case user
+    case reply
 }
 
 struct ReportView: View {
@@ -45,7 +46,11 @@ struct ReportView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .navigationTitle(targetType == .quote ? "投稿を報告" : "ユーザーを報告")
+            .navigationTitle(
+                targetType == .quote ? "投稿を報告" :
+                targetType == .user ? "ユーザーを報告" :
+                "コメントを報告"
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

@@ -11,7 +11,7 @@ struct Quote: Identifiable, Codable, Hashable {
     var likedBy: [String] = [] // いいねしたユーザーのIDリスト
     var bookmarkedBy: [String]? // ブックマークしたユーザーのIDリスト（古いデータ用にオプショナル）
     var replyCount: Int? // リプライの数（古いデータ用にオプショナル）
-    var authorUid: String = "" // 投稿者のUID（匿名認証含む）
+    var authorUid: String? // 投稿者のUID（匿名認証含む）- 古いデータ用にオプショナル
     var authorDisplayName: String = "" // 投稿者のプロフィール名
     var authorProfileImage: String? = "" // 投稿者のプロフィール画像URL（オプショナル）
     var authorBadges: [String]? = [] // 投稿者のバッジリスト（チェックマーク表示用）
@@ -24,5 +24,9 @@ struct Quote: Identifiable, Codable, Hashable {
     
     var replyCountValue: Int {
         return replyCount ?? 0
+    }
+    
+    var authorUidValue: String {
+        return authorUid ?? ""
     }
 }

@@ -14,7 +14,7 @@ class QuoteViewModel: ObservableObject {
     
     private var db = Firestore.firestore()
     private var lastDocument: DocumentSnapshot?
-    private let pageSize = 5 // 🚨 PRODUCTION FIX: 20→5に削減してコスト削減
+    private let pageSize = 5 // 🚨 PRODUCTION FIX: 20→5に削減してコスト削減（Firebase無料枠対応）
     private var listener: ListenerRegistration?
     private let badgeManager = BadgeManager()
     private let blockReportManager = BlockAndReportManager()
@@ -63,7 +63,7 @@ class QuoteViewModel: ObservableObject {
         // ワンタイム取得（リアルタイム更新なし）
         db.collection("quotes")
             .order(by: "createdAt", descending: true)
-            .limit(to: 10) // 🚨 50→10に削減してパフォーマンス向上
+            .limit(to: 8) // 🚨 Firebase無料枠対応：読み取り回数を削減
             .getDocuments { [weak self] (querySnapshot, error) in
                 DispatchQueue.main.async {
                     self?.isLoading = false
@@ -98,7 +98,7 @@ class QuoteViewModel: ObservableObject {
                     
                     // ブロックしたユーザーの投稿をフィルタリング
                     let filteredQuotes = newQuotes.filter { quote in
-                        !(self?.blockReportManager.isUserBlocked(quote.authorUid) ?? false)
+                        !(self?.blockReportManager.isUserBlocked(quote.authorUidValue) ?? false)
                     }
                     
                     self?.quotes = filteredQuotes
@@ -140,7 +140,7 @@ class QuoteViewModel: ObservableObject {
                     
                     // ブロックしたユーザーの投稿をフィルタリング
                     let filteredQuotes = newQuotes.filter { quote in
-                        !(self?.blockReportManager.isUserBlocked(quote.authorUid) ?? false)
+                        !(self?.blockReportManager.isUserBlocked(quote.authorUidValue) ?? false)
                     }
                     
                     self?.quotes.append(contentsOf: filteredQuotes)
@@ -209,14 +209,14 @@ class QuoteViewModel: ObservableObject {
         print("Quote data being saved:")
         print("  - text: '\(newQuote.text)'")
         print("  - author: '\(newQuote.author)'")
-        print("  - authorUid: '\(newQuote.authorUid)'")
+        print("  - authorUid: '\(newQuote.authorUid ?? "nil")'")
         print("  - authorDisplayName: '\(newQuote.authorDisplayName)'")
         #endif
         
         var documentData: [String: Any] = [
             "text": newQuote.text,
             "author": newQuote.author,
-            "authorUid": newQuote.authorUid,
+            "authorUid": newQuote.authorUid ?? "",
             "authorDisplayName": newQuote.authorDisplayName,
             "likes": newQuote.likes,
             "likedBy": newQuote.likedBy,
@@ -363,7 +363,7 @@ class QuoteViewModel: ObservableObject {
                         // 現在のユーザー情報を取得して通知作成
                         self?.createLikeNotificationIfNeeded(
                             fromUserId: userId,
-                            toUserId: quoteData.authorUid,
+                            toUserId: quoteData.authorUidValue,
                             quoteId: quote.id ?? "",
                             quoteText: quoteData.text
                         )
@@ -380,7 +380,7 @@ class QuoteViewModel: ObservableObject {
                        let quoteData = result["quoteData"] as? Quote,
                        !wasLiked { // いいね追加時のみ
                         // 投稿者のバッジチェック（いいね数に基づく）
-                        self?.checkAndAwardBadges(userId: quoteData.authorUid)
+                        self?.checkAndAwardBadges(userId: quoteData.authorUidValue)
                         
                         // 現在のユーザーのバッジチェック（投稿数に基づく）
                         self?.checkAndAwardBadges(userId: userId)
@@ -539,7 +539,7 @@ class QuoteViewModel: ObservableObject {
                         // リプライ通知を作成
                         self?.createReplyNotificationIfNeeded(
                             fromUserId: currentUser.uid,
-                            toUserId: quote.authorUid,
+                            toUserId: quote.authorUidValue,
                             quoteId: quote.id ?? "",
                             quoteText: quote.text,
                             replyText: newReply.text,

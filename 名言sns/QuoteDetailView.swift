@@ -12,6 +12,7 @@ struct QuoteDetailView: View {
     @State private var showingStamps = false
     @State private var selectedUserProfile: String?
     @FocusState private var isReplyFieldFocused: Bool
+    @Environment(\.dismiss) private var dismiss
     
     // ローカル状態（即座の更新用）
     @State private var localLikes: Int
@@ -23,7 +24,12 @@ struct QuoteDetailView: View {
     @State private var showingActionSheet = false
     @State private var showingReportSheet = false
     @State private var showingBlockAlert = false
+    @State private var showingDeleteAlert = false
     @State private var reportReason: ReportReason = .inappropriate
+    @State private var isCurrentUserAdmin = false
+    
+    // Firebase無料枠節約：管理者チェックのキャッシュ
+    private static var adminStatusCache: [String: Bool] = [:]
     
     // 利用規約同意
     @State private var showingTermsAgreement = false
@@ -47,12 +53,13 @@ struct QuoteDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             // メインコンテンツエリア
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 8) {
                     // 投稿者情報
-                    if let profile = authorProfile, !quote.authorUid.isEmpty {
+                    if let profile = authorProfile, !quote.authorUidValue.isEmpty {
                         Button(action: {
-                            selectedUserProfile = quote.authorUid
+                            selectedUserProfile = quote.authorUidValue
                         }) {
                             HStack(spacing: 12) {
                                 // プロフィール画像
@@ -245,18 +252,28 @@ struct QuoteDetailView: View {
                             .padding(.horizontal, 20)
                             
                             ForEach(viewModel.replies) { reply in
-                                Button(action: {
-                                    selectedUserProfile = reply.authorUid
-                                }) {
-                                    ReplyRowView(reply: reply)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .padding(.horizontal, 20)
+                                ReplyRowView(
+                                    reply: reply, 
+                                    quoteId: quote.id ?? "",
+                                    selectedUserProfile: $selectedUserProfile
+                                )
+                                    .environmentObject(viewModel)
+                                    .padding(.horizontal, 20)
+                                    .id(reply.id)
                             }
                         }
                     }
                     .padding(.top, 16)
                 }
+            }
+            .onChange(of: viewModel.replies.count) { _ in
+                // 新しいリプライが追加されたら一番下にスクロール
+                if let lastReply = viewModel.replies.last {
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        proxy.scrollTo(lastReply.id, anchor: .bottom)
+                    }
+                }
+            }
             }
             
             // リプライ入力エリア
@@ -322,7 +339,7 @@ struct QuoteDetailView: View {
         .alert("ユーザーをブロック", isPresented: $showingBlockAlert) {
             Button("キャンセル", role: .cancel) { }
             Button("ブロック", role: .destructive) {
-                blockReportManager.blockUser(quote.authorUid) { success, message in
+                blockReportManager.blockUser(quote.authorUidValue) { success, message in
                     print(message)
                     if success {
                         // ブロック成功後、データを更新
@@ -335,6 +352,14 @@ struct QuoteDetailView: View {
         } message: {
             Text("このユーザーの投稿は表示されなくなります。")
         }
+        .alert("投稿を削除", isPresented: $showingDeleteAlert) {
+            Button("キャンセル", role: .cancel) { }
+            Button("削除", role: .destructive) {
+                deleteQuote()
+            }
+        } message: {
+            Text("この投稿を削除しますか？この操作は元に戻せません。")
+        }
         .navigationDestination(item: Binding<String?>(
             get: { selectedUserProfile },
             set: { selectedUserProfile = $0 }
@@ -345,6 +370,7 @@ struct QuoteDetailView: View {
         .onAppear {
             viewModel.fetchReplies(for: quote)
             loadAuthorProfile()
+            checkCurrentUserAdminStatus()
             if Auth.auth().currentUser?.isAnonymous == false {
                 profileViewModel.loadUserProfile()
             }
@@ -365,10 +391,10 @@ struct QuoteDetailView: View {
     }
     
     private func loadAuthorProfile() {
-        guard !quote.authorUid.isEmpty else { return }
+        guard !quote.authorUidValue.isEmpty else { return }
         
         let db = Firestore.firestore()
-        db.collection("userProfiles").document(quote.authorUid).getDocument { document, error in
+        db.collection("userProfiles").document(quote.authorUidValue).getDocument { document, error in
             if let document = document, document.exists,
                let profile = try? document.data(as: UserProfile.self) {
                 DispatchQueue.main.async {
@@ -428,13 +454,26 @@ struct QuoteDetailView: View {
         var buttons: [ActionSheet.Button] = []
         let userId = Auth.auth().currentUser?.uid ?? ""
         
-        if quote.authorUid != userId {
+        // 自分の投稿の場合：削除オプション
+        if quote.authorUidValue == userId {
+            buttons.append(.destructive(Text("投稿を削除")) {
+                showingDeleteAlert = true
+            })
+        } else {
+            // 他人の投稿の場合：ブロック・報告オプション
             buttons.append(.destructive(Text("このユーザーをブロック")) {
                 showingBlockAlert = true
             })
             
             buttons.append(.destructive(Text("この投稿を報告")) {
                 showingReportSheet = true
+            })
+        }
+        
+        // 管理者権限（adminバッジ）がある場合は、他人の投稿も削除可能
+        if quote.authorUidValue != userId && isCurrentUserAdmin {
+            buttons.append(.destructive(Text("管理者として削除")) {
+                showingDeleteAlert = true
             })
         }
         
@@ -482,16 +521,86 @@ struct QuoteDetailView: View {
             return formatter.string(from: date)
         }
     }
+    
+    private func checkCurrentUserAdminStatus() {
+        let userId = Auth.auth().currentUser?.uid ?? ""
+        guard !userId.isEmpty else { return }
+        
+        // キャッシュから管理者ステータスを確認（Firebase無料枠節約）
+        if let cachedStatus = Self.adminStatusCache[userId] {
+            isCurrentUserAdmin = cachedStatus
+            return
+        }
+        
+        let db = Firestore.firestore()
+        db.collection("userProfiles").document(userId).getDocument { document, error in
+            if let document = document, document.exists,
+               let profile = try? document.data(as: UserProfile.self) {
+                let adminStatus = profile.allBadges.contains("admin")
+                DispatchQueue.main.async {
+                    self.isCurrentUserAdmin = adminStatus
+                    // キャッシュに保存（次回のFirebase読み取りを節約）
+                    Self.adminStatusCache[userId] = adminStatus
+                }
+            }
+        }
+    }
+    
+    private func deleteQuote() {
+        guard let quoteId = quote.id else { 
+            print("投稿IDが見つかりません")
+            return 
+        }
+        
+        let db = Firestore.firestore()
+        let quoteRef = db.collection("quotes").document(quoteId)
+        
+        // 投稿を削除（Firebase無料枠節約：バッチ削除は使わず単発削除）
+        quoteRef.delete { [weak viewModel] error in
+            if let error = error {
+                print("投稿削除エラー: \(error.localizedDescription)")
+            } else {
+                print("投稿を削除しました: \(quoteId)")
+                
+                // 削除成功後、ホーム画面に戻る
+                DispatchQueue.main.async {
+                    // ViewModelからも削除（メモリ効率化）
+                    viewModel?.quotes.removeAll { $0.id == quoteId }
+                    
+                    // SwiftUIの適切な方法でナビゲーション
+                    dismiss()
+                }
+            }
+        }
+    }
 }
 
 // ReplyRowView - リプライ表示用のコンポーネント
 struct ReplyRowView: View {
     let reply: Reply
+    let quoteId: String
+    @Binding var selectedUserProfile: String?
+    @EnvironmentObject var viewModel: QuoteViewModel
+    @StateObject private var blockReportManager = BlockAndReportManager()
     @State private var replyAuthorProfile: UserProfile?
+    @State private var showingActionSheet = false
+    @State private var showingReportSheet = false
+    @State private var showingBlockAlert = false
+    @State private var isHidden = false
     
     var body: some View {
+        if isHidden {
+            EmptyView()
+        } else if blockReportManager.isUserBlocked(reply.authorUid) {
+            EmptyView()
+        } else {
         HStack(alignment: .top, spacing: 12) {
-            // プロフィール画像
+            // プロフィール画像（タップ可能）
+            Button(action: {
+                if !reply.authorUid.isEmpty {
+                    selectedUserProfile = reply.authorUid
+                }
+            }) {
             if let profile = replyAuthorProfile, !reply.authorUid.isEmpty {
                 if let imageURL = profile.profileImageURL, !imageURL.isEmpty {
                     if imageURL.hasPrefix("data:") {
@@ -533,14 +642,26 @@ struct ReplyRowView: View {
                     .font(.title3)
                     .foregroundColor(.secondary)
             }
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(reply.authorUid.isEmpty)
+            .frame(width: 32, height: 32)
             
             VStack(alignment: .leading, spacing: 4) {
-                // ユーザー名 + チェックマーク + 時刻
+                // ユーザー名 + チェックマーク + 時刻（タップ可能）
                 HStack(spacing: 4) {
-                    Text(reply.authorDisplayName.isEmpty ? reply.author : reply.authorDisplayName)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                    Button(action: {
+                        if !reply.authorUid.isEmpty {
+                            selectedUserProfile = reply.authorUid
+                        }
+                    }) {
+                        Text(reply.authorDisplayName.isEmpty ? reply.author : reply.authorDisplayName)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(reply.authorUid.isEmpty)
                     
                     // チェックマーク表示（リプライ用）
                     if let profile = replyAuthorProfile {
@@ -572,9 +693,90 @@ struct ReplyRowView: View {
             }
             
             Spacer()
+            
+            // メニューボタン（3点リーダー）- 独立したVStackで包む
+            VStack {
+                Button(action: {
+                    print("3点メニューがタップされました - showingActionSheet: \(showingActionSheet)")
+                    showingActionSheet = true
+                    print("ActionSheet状態変更後: \(showingActionSheet)")
+                }) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+            }
+            .frame(width: 32)
         }
         .onAppear {
             loadReplyAuthorProfile()
+            blockReportManager.loadBlockedUsers()
+        }
+        .confirmationDialog("コメントのオプション", isPresented: $showingActionSheet, titleVisibility: .visible) {
+            let userId = Auth.auth().currentUser?.uid ?? ""
+            
+            if reply.authorUid == userId {
+                // 自分のコメントの場合：削除オプション
+                Button("コメントを削除", role: .destructive) {
+                    deleteReply()
+                }
+            } else {
+                // 他人のコメントの場合：報告・ブロック・非表示オプション
+                Button("このユーザーをブロック", role: .destructive) {
+                    showingBlockAlert = true
+                }
+                
+                Button("このコメントを報告", role: .destructive) {
+                    showingReportSheet = true
+                }
+                
+                Button("このコメントを非表示") {
+                    withAnimation {
+                        isHidden = true
+                    }
+                }
+            }
+            
+            Button("キャンセル", role: .cancel) { }
+        }
+        .sheet(isPresented: $showingReportSheet) {
+            ReportView(
+                targetType: .reply,
+                targetId: reply.id ?? "",
+                onSubmit: { reason, additionalInfo in
+                    blockReportManager.reportReply(
+                        quoteId,
+                        replyId: reply.id ?? "",
+                        reason: reason,
+                        additionalInfo: additionalInfo
+                    ) { success, message in
+                        print(message)
+                    }
+                }
+            )
+        }
+        .alert("ユーザーをブロック", isPresented: $showingBlockAlert) {
+            Button("キャンセル", role: .cancel) { }
+            Button("ブロック", role: .destructive) {
+                blockReportManager.blockUser(reply.authorUid) { success, message in
+                    print(message)
+                    if success {
+                        DispatchQueue.main.async {
+                            viewModel.fetchData()
+                        }
+                    }
+                }
+            }
+        } message: {
+            Text("このユーザーの投稿とコメントは表示されなくなります。")
+        }
         }
     }
     
@@ -587,6 +789,25 @@ struct ReplyRowView: View {
                let profile = try? document.data(as: UserProfile.self) {
                 DispatchQueue.main.async {
                     self.replyAuthorProfile = profile
+                }
+            }
+        }
+    }
+    
+    private func deleteReply() {
+        guard let replyId = reply.id else { return }
+        
+        let db = Firestore.firestore()
+        let replyRef = db.collection("quotes").document(quoteId).collection("replies").document(replyId)
+        
+        replyRef.delete { [weak viewModel] error in
+            if let error = error {
+                print("リプライ削除エラー: \(error.localizedDescription)")
+            } else {
+                print("リプライを削除しました")
+                // ViewModelのリプライリストを更新
+                DispatchQueue.main.async {
+                    viewModel?.replies.removeAll { $0.id == replyId }
                 }
             }
         }
