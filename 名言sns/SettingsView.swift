@@ -55,8 +55,11 @@ struct SettingsView: View {
                                     }
                                 }
                                 // 投稿数とブックマーク数を表示
-                                HStack(spacing: 12) {
-                                    HStack(spacing: 2) {
+                                HStack(spacing: 16) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "doc.text.fill")
+                                            .font(.caption2)
+                                            .foregroundColor(.blue)
                                         Text("\(profileViewModel.userProfile?.postCount ?? 0)")
                                             .font(.caption)
                                             .fontWeight(.semibold)
@@ -64,7 +67,10 @@ struct SettingsView: View {
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
-                                    HStack(spacing: 2) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "bookmark.fill")
+                                            .font(.caption2)
+                                            .foregroundColor(.orange)
                                         Text("\(profileViewModel.bookmarkedQuotesCount)")
                                             .font(.caption)
                                             .fontWeight(.semibold)
@@ -333,8 +339,8 @@ struct SettingsView: View {
             if isLoggedIn {
                 // プロフィール情報とブックマーク数を取得
                 profileViewModel.loadUserProfile()
-                // 少し遅延させてブックマーク数を再取得（確実性のため）
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // 即座にブックマーク数も取得（0.1秒後）
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     profileViewModel.refreshBookmarkCount()
                 }
             }

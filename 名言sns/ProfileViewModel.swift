@@ -318,9 +318,12 @@ class ProfileViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     if let documents = snapshot?.documents {
                         let actualCount = documents.count
-                        self?.userProfile?.postCount = actualCount
-                        self?.checkAndAwardBadges()
-                        self?.saveUserProfile()
+                        // 投稿数が変わった場合のみ更新
+                        if self?.userProfile?.postCount != actualCount {
+                            self?.userProfile?.postCount = actualCount
+                            self?.checkAndAwardBadges()
+                            self?.saveUserProfile()
+                        }
                     }
                 }
             }
