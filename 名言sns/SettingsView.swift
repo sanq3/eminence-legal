@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var showingAccountDeletion = false
     @State private var showingContactSupport = false
     @State private var bookmarkCount = 0  // ブックマーク数を明示的に管理
+    @State private var showingAllBadges = false  // バッジコレクション画面表示用
     
     private var isLoggedIn: Bool {
         Auth.auth().currentUser?.isAnonymous == false
@@ -91,6 +92,28 @@ struct SettingsView: View {
                             }
                         }
                         .padding(.vertical, 8)
+                        
+                        // バッジコレクション
+                        Button(action: {
+                            showingAllBadges = true
+                        }) {
+                            HStack {
+                                Image(systemName: "star.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.yellow)
+                                Text("バッジコレクション")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if let badgeCount = profileViewModel.userProfile?.allBadges.count {
+                                    Text("\(badgeCount)/24")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                 } else {
                     Section("アカウント") {
@@ -295,6 +318,9 @@ struct SettingsView: View {
         .sheet(isPresented: $showingContactSupport) {
             ContactSupportView()
         }
+        .sheet(isPresented: $showingAllBadges) {
+            AllBadgesView(profileViewModel: profileViewModel)
+        }
         .alert(alertTitle, isPresented: $showingAlert) {
             if alertTitle == "ログアウト" {
                 Button("キャンセル", role: .cancel) { }
@@ -336,29 +362,19 @@ struct SettingsView: View {
                     .cornerRadius(10)
             }
         }
-        .onAppear {
+        .task {
+            // .taskを使用して非同期で確実に取得
             if isLoggedIn {
                 // プロフィール情報を取得
                 profileViewModel.loadUserProfile()
                 
                 // ブックマーク数を直接取得
                 if let uid = Auth.auth().currentUser?.uid {
-                    Firestore.firestore()
-                        .collection("quotes")
-                        .whereField("bookmarkedBy", arrayContains: uid)
-                        .getDocuments { snapshot, error in
-                            DispatchQueue.main.async {
-                                if let documents = snapshot?.documents {
-                                    self.bookmarkCount = documents.count
-                                    print("✅ SettingsView: ブックマーク数を設定 = \(documents.count)件")
-                                } else {
-                                    self.bookmarkCount = 0
-                                    print("⚠️ SettingsView: ブックマーク数 = 0件")
-                                }
-                            }
-                        }
+                    await fetchBookmarkCount(for: uid)
                 }
             }
+        }
+        .onAppear {
             // ダークモード設定を即座に適用
             DispatchQueue.main.async {
                 if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
@@ -369,6 +385,23 @@ struct SettingsView: View {
         .onChange(of: profileViewModel.bookmarkedQuotesCount) { newValue in
             // ViewModelの値が更新されたら反映
             bookmarkCount = newValue
+        }
+    }
+    
+    // ブックマーク数を非同期で取得
+    @MainActor
+    private func fetchBookmarkCount(for uid: String) async {
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("quotes")
+                .whereField("bookmarkedBy", arrayContains: uid)
+                .getDocuments()
+            
+            self.bookmarkCount = snapshot.documents.count
+            print("✅ SettingsView: ブックマーク数を設定 = \(snapshot.documents.count)件")
+        } catch {
+            print("❌ SettingsView: ブックマーク数取得エラー = \(error)")
+            self.bookmarkCount = 0
         }
     }
     
