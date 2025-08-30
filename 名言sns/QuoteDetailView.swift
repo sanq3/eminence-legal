@@ -655,7 +655,7 @@ struct ReplyRowView: View {
                             selectedUserProfile = reply.authorUid
                         }
                     }) {
-                        Text(reply.authorDisplayName.isEmpty ? reply.author : reply.authorDisplayName)
+                        Text((reply.authorDisplayName ?? "").isEmpty ? reply.author : (reply.authorDisplayName ?? ""))
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(.secondary)

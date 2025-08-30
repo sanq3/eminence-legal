@@ -12,7 +12,7 @@ struct Quote: Identifiable, Codable, Hashable {
     var bookmarkedBy: [String]? // ブックマークしたユーザーのIDリスト（古いデータ用にオプショナル）
     var replyCount: Int? // リプライの数（古いデータ用にオプショナル）
     var authorUid: String? // 投稿者のUID（匿名認証含む）- 古いデータ用にオプショナル
-    var authorDisplayName: String = "" // 投稿者のプロフィール名
+    var authorDisplayName: String? = "" // 投稿者のプロフィール名（オプショナル）
     var authorProfileImage: String? = "" // 投稿者のプロフィール画像URL（オプショナル）
     var authorBadges: [String]? = [] // 投稿者のバッジリスト（チェックマーク表示用）
     var createdAt: Date = Date() // 投稿日時

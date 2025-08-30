@@ -14,7 +14,7 @@ class QuoteViewModel: ObservableObject {
     
     private var db = Firestore.firestore()
     private var lastDocument: DocumentSnapshot?
-    private let pageSize = 5 // 🚨 PRODUCTION FIX: 20→5に削減してコスト削減（Firebase無料枠対応）
+    private let pageSize = 20 // ページサイズを適切に設定
     private var listener: ListenerRegistration?
     private let badgeManager = BadgeManager()
     private let blockReportManager = BlockAndReportManager()
@@ -63,7 +63,7 @@ class QuoteViewModel: ObservableObject {
         // ワンタイム取得（リアルタイム更新なし）
         db.collection("quotes")
             .order(by: "createdAt", descending: true)
-            .limit(to: 8) // 🚨 Firebase無料枠対応：読み取り回数を削減
+            .limit(to: pageSize) // 初回読み込み時もpageSizeを使用
             .getDocuments { [weak self] (querySnapshot, error) in
                 DispatchQueue.main.async {
                     self?.isLoading = false
@@ -103,7 +103,7 @@ class QuoteViewModel: ObservableObject {
                     
                     self?.quotes = filteredQuotes
                     self?.lastDocument = documents.last
-                    self?.hasMoreData = documents.count >= 10
+                    self?.hasMoreData = documents.count >= self?.pageSize ?? 20
                     
                     print("📊 Loaded \(newQuotes.count) quotes (cost-optimized)")
                 }
@@ -119,7 +119,7 @@ class QuoteViewModel: ObservableObject {
         db.collection("quotes")
             .order(by: "createdAt", descending: true)
             .start(afterDocument: lastDoc)
-            .limit(to: 5) // 🚨 PRODUCTION FIX: 無限スクロール1回につき5件
+            .limit(to: pageSize) // 無限スクロールでもpageSizeを使用
             .getDocuments { [weak self] (querySnapshot, error) in
                 DispatchQueue.main.async {
                     self?.isLoadingMore = false
@@ -210,14 +210,14 @@ class QuoteViewModel: ObservableObject {
         print("  - text: '\(newQuote.text)'")
         print("  - author: '\(newQuote.author)'")
         print("  - authorUid: '\(newQuote.authorUid ?? "nil")'")
-        print("  - authorDisplayName: '\(newQuote.authorDisplayName)'")
+        print("  - authorDisplayName: '\(newQuote.authorDisplayName ?? "")'")
         #endif
         
         var documentData: [String: Any] = [
             "text": newQuote.text,
             "author": newQuote.author,
             "authorUid": newQuote.authorUid ?? "",
-            "authorDisplayName": newQuote.authorDisplayName,
+            "authorDisplayName": newQuote.authorDisplayName ?? "",
             "likes": newQuote.likes,
             "likedBy": newQuote.likedBy,
             "bookmarkedBy": newQuote.bookmarkedByArray,

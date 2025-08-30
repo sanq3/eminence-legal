@@ -6,7 +6,7 @@ struct Reply: Identifiable, Codable, Hashable {
     var text: String
     var author: String
     var authorUid: String
-    var authorDisplayName: String = ""  // プロフィール名
+    var authorDisplayName: String? = ""  // プロフィール名（オプショナル）
     var authorProfileImage: String = "" // プロフィール画像URL（将来実装用）
     var createdAt: Date = Date()
 }
