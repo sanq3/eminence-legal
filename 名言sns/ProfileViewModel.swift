@@ -9,14 +9,20 @@ class ProfileViewModel: ObservableObject {
     @Published var userProfile: UserProfile?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var bookmarkedQuotesCount = 0 // ブックマーク数を追跡
     
     private let db = Firestore.firestore()
     private let badgeManager = BadgeManager()
+    private var bookmarkListener: ListenerRegistration?
     
     func loadUserProfile() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         
         isLoading = true
+        
+        // ブックマーク数をリアルタイムで監視
+        setupBookmarkCountListener()
+        
         db.collection("userProfiles").document(uid).getDocument { [weak self] document, error in
             DispatchQueue.main.async {
                 self?.isLoading = false
@@ -39,6 +45,24 @@ class ProfileViewModel: ObservableObject {
                 }
             }
         }
+    }
+    
+    // ブックマーク数をリアルタイムで監視
+    private func setupBookmarkCountListener() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        
+        bookmarkListener?.remove()
+        
+        // ブックマークした名言数を監視
+        bookmarkListener = db.collection("quotes")
+            .whereField("bookmarkedBy", arrayContains: uid)
+            .addSnapshotListener { [weak self] snapshot, error in
+                DispatchQueue.main.async {
+                    if let documents = snapshot?.documents {
+                        self?.bookmarkedQuotesCount = documents.count
+                    }
+                }
+            }
     }
     
     private func createNewProfile(uid: String) {
@@ -257,5 +281,8 @@ class ProfileViewModel: ObservableObject {
     
     func clearUserProfile() {
         userProfile = nil
+        bookmarkListener?.remove()
+        bookmarkListener = nil
+        bookmarkedQuotesCount = 0
     }
 }

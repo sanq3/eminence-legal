@@ -32,7 +32,7 @@ struct SettingsView: View {
                             Image(systemName: "person.circle.fill")
                                 .font(.title2)
                                 .foregroundColor(.blue)
-                            VStack(alignment: .leading) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text(profileViewModel.userProfile?.displayName ?? "ユーザー名未設定")
                                     .font(.headline)
                                 if let uid = Auth.auth().currentUser?.uid {
@@ -54,6 +54,25 @@ struct SettingsView: View {
                                         }
                                     }
                                 }
+                                // 投稿数とブックマーク数を表示
+                                HStack(spacing: 12) {
+                                    HStack(spacing: 2) {
+                                        Text("\(profileViewModel.userProfile?.postCount ?? 0)")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                        Text("投稿")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    HStack(spacing: 2) {
+                                        Text("\(profileViewModel.bookmarkedQuotesCount)")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                        Text("ブックマーク")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
                             }
                             Spacer()
                             Button(action: {
@@ -64,7 +83,7 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 8)
                     }
                 } else {
                     Section("アカウント") {

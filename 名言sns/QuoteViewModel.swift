@@ -11,11 +11,13 @@ class QuoteViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var hasMoreData = true
+    @Published var bookmarkedQuoteIds = Set<String>() // ブックマーク済みIDをキャッシュ
     
     private var db = Firestore.firestore()
     private var lastDocument: DocumentSnapshot?
     private let pageSize = 20 // ページサイズを適切に設定
     private var listener: ListenerRegistration?
+    private var bookmarkListener: ListenerRegistration? // ブックマーク用リスナー
     private let badgeManager = BadgeManager()
     private let blockReportManager = BlockAndReportManager()
 
@@ -44,7 +46,7 @@ class QuoteViewModel: ObservableObject {
         }
     }
 
-    // データを読み込む（リアルタイム更新を削除してコスト削減）
+    // データを読み込む（ハイブリッド方式：初回取得＋限定的リアルタイム）
     func fetchData() {
         isLoading = true
         errorMessage = nil
@@ -54,8 +56,9 @@ class QuoteViewModel: ObservableObject {
         // ブロックリストを再読み込み
         blockReportManager.loadBlockedUsers()
         
-        // 🚨 PRODUCTION FIX: リアルタイムリスナーをワンタイム取得に変更
-        // リアルタイムリスナーはコストが高く、100ユーザーで月額数万円になる可能性
+        // ユーザーのブックマークを監視
+        setupBookmarkListener()
+        
         // 既存のリスナーがあれば削除
         listener?.remove()
         
@@ -105,7 +108,10 @@ class QuoteViewModel: ObservableObject {
                     self?.lastDocument = documents.last
                     self?.hasMoreData = documents.count >= self?.pageSize ?? 20
                     
-                    print("📊 Loaded \(newQuotes.count) quotes (cost-optimized)")
+                    print("📊 Loaded \(newQuotes.count) quotes")
+                    
+                    // 最新10件のみリアルタイム監視（コスト削減）
+                    self?.setupLimitedRealtimeListener()
                 }
             }
     }
@@ -668,12 +674,79 @@ class QuoteViewModel: ObservableObject {
         
     }
     
+    // 限定的なリアルタイム監視（最新10件のみ）
+    private func setupLimitedRealtimeListener() {
+        // 既存のリスナーを削除
+        listener?.remove()
+        
+        // 最新10件のみリアルタイム監視（コスト削減）
+        listener = db.collection("quotes")
+            .order(by: "createdAt", descending: true)
+            .limit(to: 10)
+            .addSnapshotListener { [weak self] querySnapshot, error in
+                guard let documents = querySnapshot?.documents else { return }
+                
+                let updatedQuotes = documents.compactMap { doc -> Quote? in
+                    try? doc.data(as: Quote.self)
+                }
+                
+                // ブロックしたユーザーの投稿をフィルタリング
+                let filteredQuotes = updatedQuotes.filter { quote in
+                    !(self?.blockReportManager.isUserBlocked(quote.authorUidValue) ?? false)
+                }
+                
+                DispatchQueue.main.async {
+                    // 既存の最新10件を更新
+                    for updatedQuote in filteredQuotes {
+                        if let index = self?.quotes.firstIndex(where: { $0.id == updatedQuote.id }) {
+                            // いいね数、ブックマーク数、リプライ数を更新
+                            self?.quotes[index].likes = updatedQuote.likes
+                            self?.quotes[index].likedBy = updatedQuote.likedBy
+                            self?.quotes[index].bookmarkedBy = updatedQuote.bookmarkedBy
+                            self?.quotes[index].replyCount = updatedQuote.replyCount
+                        }
+                    }
+                }
+            }
+    }
+    
+    // ブックマークの監視
+    private func setupBookmarkListener() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        bookmarkListener?.remove()
+        
+        // ユーザーのブックマークを監視
+        bookmarkListener = db.collection("quotes")
+            .whereField("bookmarkedBy", arrayContains: userId)
+            .addSnapshotListener { [weak self] querySnapshot, error in
+                guard let documents = querySnapshot?.documents else { return }
+                
+                DispatchQueue.main.async {
+                    // ブックマーク済みIDを更新
+                    self?.bookmarkedQuoteIds = Set(documents.compactMap { $0.documentID })
+                    
+                    // UIを更新
+                    for documentSnapshot in documents {
+                        if let quote = try? documentSnapshot.data(as: Quote.self),
+                           let index = self?.quotes.firstIndex(where: { $0.id == quote.id }) {
+                            self?.quotes[index].bookmarkedBy = quote.bookmarkedBy
+                        }
+                    }
+                }
+            }
+    }
+    
     func clearLocalStates() {
         // ローカルのいいね・ブックマーク状態をクリア
         for i in 0..<quotes.count {
             quotes[i].likedBy = []
             quotes[i].bookmarkedBy = []
         }
+        
+        // リスナーも削除
+        listener?.remove()
+        bookmarkListener?.remove()
     }
     
     // バッジ獲得チェック
