@@ -20,9 +20,10 @@ class ProfileViewModel: ObservableObject {
         
         isLoading = true
         
-        // ブックマーク数をリアルタイムで監視
+        // ブックマーク数をリアルタイムで監視（最初に設定）
         setupBookmarkCountListener()
         
+        // プロフィール情報を取得
         db.collection("userProfiles").document(uid).getDocument { [weak self] document, error in
             DispatchQueue.main.async {
                 self?.isLoading = false
@@ -35,7 +36,8 @@ class ProfileViewModel: ObservableObject {
                 if let document = document, document.exists {
                     do {
                         self?.userProfile = try document.data(as: UserProfile.self)
-                        
+                        // 投稿数も実際の数を取得
+                        self?.updateActualPostCount()
                     } catch {
                         self?.errorMessage = error.localizedDescription
                     }
@@ -45,6 +47,24 @@ class ProfileViewModel: ObservableObject {
                 }
             }
         }
+        
+        // ブックマーク数を即座に取得（初回ロード用）
+        loadBookmarkCountImmediate()
+    }
+    
+    // ブックマーク数を即座に取得
+    private func loadBookmarkCountImmediate() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        
+        db.collection("quotes")
+            .whereField("bookmarkedBy", arrayContains: uid)
+            .getDocuments { [weak self] snapshot, error in
+                DispatchQueue.main.async {
+                    if let documents = snapshot?.documents {
+                        self?.bookmarkedQuotesCount = documents.count
+                    }
+                }
+            }
     }
     
     // ブックマーク数をリアルタイムで監視

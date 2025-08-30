@@ -112,6 +112,15 @@ struct OtherUserProfileView: View {
                                     }
                                     
                                     VStack(spacing: 4) {
+                                        Text("\(viewModel.bookmarkedQuotesCount)")
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                        Text("ブックマーク")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    VStack(spacing: 4) {
                                         Text("\(viewModel.userProfile?.allBadges.count ?? 0)")
                                             .font(.title2)
                                             .fontWeight(.bold)
@@ -288,21 +297,25 @@ class OtherUserProfileViewModel: ObservableObject {
     @Published var userQuotes: [Quote] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var bookmarkedQuotesCount = 0 // ブックマーク数
     
     var totalLikes: Int {
         userQuotes.reduce(0) { $0 + $1.likes }
     }
     
     private let db = Firestore.firestore()
+    private var bookmarkListener: ListenerRegistration?
     
     func loadUserData(userId: String) {
         isLoading = true
         errorMessage = nil
         userQuotes = []
         userProfile = nil
+        bookmarkedQuotesCount = 0
         
         loadUserProfile(userId: userId)
         loadUserQuotes(userId: userId)
+        loadUserBookmarkCount(userId: userId)
     }
     
     private func loadUserProfile(userId: String) {
@@ -368,6 +381,25 @@ class OtherUserProfileViewModel: ObservableObject {
                     self?.userQuotes = sortedQuotes
                 }
             }
+    }
+    
+    private func loadUserBookmarkCount(userId: String) {
+        // ブックマーク数をリアルタイムで監視
+        bookmarkListener?.remove()
+        
+        bookmarkListener = db.collection("quotes")
+            .whereField("bookmarkedBy", arrayContains: userId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                DispatchQueue.main.async {
+                    if let documents = snapshot?.documents {
+                        self?.bookmarkedQuotesCount = documents.count
+                    }
+                }
+            }
+    }
+    
+    deinit {
+        bookmarkListener?.remove()
     }
 }
 
