@@ -331,7 +331,12 @@ struct SettingsView: View {
         }
         .onAppear {
             if isLoggedIn {
+                // プロフィール情報とブックマーク数を取得
                 profileViewModel.loadUserProfile()
+                // 少し遅延させてブックマーク数を再取得（確実性のため）
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    profileViewModel.refreshBookmarkCount()
+                }
             }
             // ダークモード設定を即座に適用
             DispatchQueue.main.async {

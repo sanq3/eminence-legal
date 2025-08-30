@@ -54,14 +54,29 @@ class ProfileViewModel: ObservableObject {
     
     // ブックマーク数を即座に取得
     private func loadBookmarkCountImmediate() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+        guard let uid = Auth.auth().currentUser?.uid else { 
+            print("❌ ブックマーク数取得: ユーザーIDが見つかりません")
+            return 
+        }
+        
+        print("📚 ブックマーク数を取得中... (ユーザー: \(uid))")
         
         db.collection("quotes")
             .whereField("bookmarkedBy", arrayContains: uid)
             .getDocuments { [weak self] snapshot, error in
                 DispatchQueue.main.async {
+                    if let error = error {
+                        print("❌ ブックマーク数取得エラー: \(error)")
+                        return
+                    }
+                    
                     if let documents = snapshot?.documents {
-                        self?.bookmarkedQuotesCount = documents.count
+                        let count = documents.count
+                        self?.bookmarkedQuotesCount = count
+                        print("✅ ブックマーク数取得成功: \(count)件")
+                    } else {
+                        print("⚠️ ブックマークドキュメントが見つかりません")
+                        self?.bookmarkedQuotesCount = 0
                     }
                 }
             }
@@ -69,17 +84,29 @@ class ProfileViewModel: ObservableObject {
     
     // ブックマーク数をリアルタイムで監視
     private func setupBookmarkCountListener() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+        guard let uid = Auth.auth().currentUser?.uid else { 
+            print("❌ ブックマークリスナー: ユーザーIDが見つかりません")
+            return 
+        }
         
         bookmarkListener?.remove()
+        
+        print("🔄 ブックマークリスナーを設定中... (ユーザー: \(uid))")
         
         // ブックマークした名言数を監視
         bookmarkListener = db.collection("quotes")
             .whereField("bookmarkedBy", arrayContains: uid)
             .addSnapshotListener { [weak self] snapshot, error in
                 DispatchQueue.main.async {
+                    if let error = error {
+                        print("❌ ブックマークリスナーエラー: \(error)")
+                        return
+                    }
+                    
                     if let documents = snapshot?.documents {
-                        self?.bookmarkedQuotesCount = documents.count
+                        let count = documents.count
+                        self?.bookmarkedQuotesCount = count
+                        print("📊 ブックマーク数更新: \(count)件 (リアルタイム)")
                     }
                 }
             }
@@ -294,6 +321,36 @@ class ProfileViewModel: ObservableObject {
                         self?.userProfile?.postCount = actualCount
                         self?.checkAndAwardBadges()
                         self?.saveUserProfile()
+                    }
+                }
+            }
+    }
+    
+    // ブックマーク数を強制的に再取得（リフレッシュ用）
+    func refreshBookmarkCount() {
+        guard let uid = Auth.auth().currentUser?.uid else { 
+            print("❌ リフレッシュ: ユーザーIDが見つかりません")
+            return 
+        }
+        
+        print("🔄 ブックマーク数を強制リフレッシュ... (ユーザー: \(uid))")
+        
+        db.collection("quotes")
+            .whereField("bookmarkedBy", arrayContains: uid)
+            .getDocuments { [weak self] snapshot, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        print("❌ リフレッシュエラー: \(error)")
+                        return
+                    }
+                    
+                    if let documents = snapshot?.documents {
+                        let count = documents.count
+                        self?.bookmarkedQuotesCount = count
+                        print("✅ ブックマーク数リフレッシュ成功: \(count)件")
+                    } else {
+                        self?.bookmarkedQuotesCount = 0
+                        print("⚠️ ブックマークが0件です")
                     }
                 }
             }
