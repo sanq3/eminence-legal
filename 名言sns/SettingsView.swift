@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var showingAdminPanel = false
     @State private var showingAccountDeletion = false
     @State private var showingContactSupport = false
+    @State private var bookmarkCount = 0  // ブックマーク数を明示的に管理
     
     private var isLoggedIn: Bool {
         Auth.auth().currentUser?.isAnonymous == false
@@ -71,7 +72,7 @@ struct SettingsView: View {
                                         Image(systemName: "bookmark.fill")
                                             .font(.caption2)
                                             .foregroundColor(.orange)
-                                        Text("\(profileViewModel.bookmarkedQuotesCount)")
+                                        Text("\(bookmarkCount)")
                                             .font(.caption)
                                             .fontWeight(.semibold)
                                         Text("ブックマーク")
@@ -337,11 +338,25 @@ struct SettingsView: View {
         }
         .onAppear {
             if isLoggedIn {
-                // プロフィール情報とブックマーク数を取得
+                // プロフィール情報を取得
                 profileViewModel.loadUserProfile()
-                // 即座にブックマーク数も取得（0.1秒後）
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    profileViewModel.refreshBookmarkCount()
+                
+                // ブックマーク数を直接取得
+                if let uid = Auth.auth().currentUser?.uid {
+                    Firestore.firestore()
+                        .collection("quotes")
+                        .whereField("bookmarkedBy", arrayContains: uid)
+                        .getDocuments { snapshot, error in
+                            DispatchQueue.main.async {
+                                if let documents = snapshot?.documents {
+                                    self.bookmarkCount = documents.count
+                                    print("✅ SettingsView: ブックマーク数を設定 = \(documents.count)件")
+                                } else {
+                                    self.bookmarkCount = 0
+                                    print("⚠️ SettingsView: ブックマーク数 = 0件")
+                                }
+                            }
+                        }
                 }
             }
             // ダークモード設定を即座に適用
@@ -350,6 +365,10 @@ struct SettingsView: View {
                     windowScene.windows.first?.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
                 }
             }
+        }
+        .onChange(of: profileViewModel.bookmarkedQuotesCount) { newValue in
+            // ViewModelの値が更新されたら反映
+            bookmarkCount = newValue
         }
     }
     
